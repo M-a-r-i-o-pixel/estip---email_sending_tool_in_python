@@ -1,6 +1,7 @@
 
 import smtplib
 import sys
+import mimetypes
 from email.message import EmailMessage
 from email.utils import parseaddr
 from getpass import getpass
@@ -199,6 +200,72 @@ IMPORTANT:
         return subject, body
 
 
+def get_attachments():
+    attachments = []
+
+    print("\nFILE ATTACHMENTS")
+    print("You can attach multiple files to your emails.")
+    print("For example: PDF, images, Word documents, etc.")
+
+    while True:
+        choice = input("\nAdd an attachment? (yes/no): ").strip().lower()
+
+        if choice in ("no", "n"):
+            return attachments
+
+        if choice not in ("yes", "y"):
+            print("Invalid choice. Enter yes or no.")
+            continue
+
+        filename = input("Enter the file path: ").strip()
+
+        try:
+            file_path = Path(filename).expanduser()
+
+            if not file_path.is_file():
+                print("The specified file does not exist.")
+                continue
+
+            file_data = file_path.read_bytes()
+
+            # Detect the file's MIME type
+            content_type, encoding = mimetypes.guess_type(
+                file_path.name
+            )
+
+            if content_type is None or encoding is not None:
+                content_type = "application/octet-stream"
+
+            maintype, subtype = content_type.split("/", 1)
+
+            attachments.append(
+                (
+                    file_path.name,
+                    file_data,
+                    maintype,
+                    subtype
+                )
+            )
+
+            print(f"Added attachment: {file_path.name}")
+
+        except OSError as error:
+            print(f"Could not read file: {error}")
+            continue
+
+        print("\n1. Add another attachment")
+        print("2. Finish adding attachments")
+
+        next_choice = input("Your choice: ").strip()
+
+        if next_choice == "2":
+            return attachments
+
+        if next_choice != "1":
+            print("Invalid choice. Returning to attachment selection.")
+            continue
+
+
 def main():
     print("=" * 50)
     print("          PYTHON GMAIL SMTP EMAIL SENDER")
@@ -238,6 +305,8 @@ Google accounts.
 
     subject, body = get_email_content()
 
+    attachments = get_attachments()
+
     # Confirm before sending
     print("\nEMAIL SUMMARY")
     print("-" * 50)
@@ -245,6 +314,14 @@ Google accounts.
     print(f"Recipients: {len(recipients)}")
     print(f"Subject: {subject}")
     print(f"Message length: {len(body):,} characters")
+    print(f"Attachments: {len(attachments)}")
+
+    if attachments:
+        print("\nATTACHED FILES:")
+
+        for filename, file_data, maintype, subtype in attachments:
+            print(f"- {filename} ({len(file_data):,} bytes)")
+
     print("-" * 50)
 
     confirmation = input("Send emails? (yes/no): ").strip().lower()
@@ -264,6 +341,15 @@ Google accounts.
                 msg["From"] = sender
                 msg["To"] = recipient
                 msg.set_content(body)
+
+                # Add attachments to the email
+                for filename, file_data, maintype, subtype in attachments:
+                    msg.add_attachment(
+                        file_data,
+                        maintype=maintype,
+                        subtype=subtype,
+                        filename=filename
+                    )
 
                 try:
                     smtp.send_message(msg)
